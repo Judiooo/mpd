@@ -14,7 +14,8 @@ export default function CategoryPageClient() {
 
   const getKey = (pageIndex: number, previousPageData: TmdbListResponse | null) => {
     if (previousPageData && previousPageData.results.length === 0) return null
-    return `${path}?page=${pageIndex + 1}`
+    const separator = path.includes('?') ? '&' : '?'
+    return `${path}${separator}page=${pageIndex + 1}`
   }
 
   const { data, error, size, setSize, isValidating } = useSWRInfinite<TmdbListResponse>(getKey, tmdbFetcher)

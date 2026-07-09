@@ -24,7 +24,7 @@ export function GenresRow({ media = 'movie' }: { media?: 'movie' | 'tv' }) {
         {CURATED_GENRES.map((g) => (
           <Link
             key={g.id}
-            href={`/category?path=discover/${media}&with_genres=${g.id}&title=${encodeURIComponent(g.name)}&media=${media}`}
+            href={`/category?path=${encodeURIComponent(`discover/${media}?with_genres=${g.id}`)}&title=${encodeURIComponent(g.name)}&media=${media}`}
             className="tv-focus rounded-full border px-3 py-1 text-sm"
           >
             {g.name}

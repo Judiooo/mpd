@@ -18,9 +18,7 @@ export function DecadesRow() {
         {DECADES.map((decade) => (
           <Link
             key={decade.label}
-            href={`/category?path=${encodeURIComponent(
-              `discover/movie?primary_release_date.gte=${decade.from}-01-01&primary_release_date.lte=${decade.to}-12-31`,
-            )}&title=${encodeURIComponent(decade.label)}&media=movie`}
+            href={`/category?path=${encodeURIComponent(`discover/movie?primary_release_date.gte=${decade.from}-01-01&primary_release_date.lte=${decade.to}-12-31`)}&title=${encodeURIComponent(decade.label)}&media=movie`}
             className="tv-focus rounded-full border px-3 py-1 text-sm"
           >
             {decade.label}
