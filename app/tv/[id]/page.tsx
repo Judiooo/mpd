@@ -81,6 +81,35 @@ export default function TvPage({ params }: { params: Promise<{ id: string }> }) 
     tmdbFetcher,
   )
 
+  const title = data?.name ?? 'Без названия'
+  const year = data ? mediaYear(data) : ''
+  const seasons = data?.seasons?.filter((s) => s.season_number > 0 && s.episode_count > 0) ?? []
+  const currentSeason = activeSeason ?? seasons[0]?.season_number ?? 1
+
+  useEffect(() => {
+    if (!data || !Number.isInteger(requestedSeason) || requestedSeason <= 0) return
+    const seasonExists = seasons.some((s) => s.season_number === requestedSeason)
+    if (seasonExists) setActiveSeason(requestedSeason)
+  }, [data, requestedSeason, seasons])
+
+  useEffect(() => {
+    if (!data || !Number.isInteger(requestedSeason) || requestedSeason <= 0 || !Number.isInteger(requestedEpisode) || requestedEpisode <= 0) return
+    if (activeSeason !== requestedSeason) return
+    const timer = window.setTimeout(() => {
+      setPicking({
+        id: data.id,
+        mediaType: 'tv',
+        title,
+        originalTitle: data.original_name ?? '',
+        year,
+        posterPath: data.poster_path,
+        season: requestedSeason,
+        episode: requestedEpisode,
+      })
+    }, 150)
+    return () => window.clearTimeout(timer)
+  }, [activeSeason, data, requestedEpisode, requestedSeason, title, year])
+
   if (error) {
     return (
       <main className="mx-auto max-w-[1800px] px-4 py-16 text-center md:px-8">
@@ -102,35 +131,6 @@ export default function TvPage({ params }: { params: Promise<{ id: string }> }) 
       </main>
     )
   }
-
-  const title = data.name ?? 'Без названия'
-  const year = mediaYear(data)
-  const seasons = data.seasons.filter((s) => s.season_number > 0 && s.episode_count > 0)
-  const currentSeason = activeSeason ?? seasons[0]?.season_number ?? 1
-
-  useEffect(() => {
-    if (!Number.isInteger(requestedSeason) || requestedSeason <= 0) return
-    const seasonExists = seasons.some((s) => s.season_number === requestedSeason)
-    if (seasonExists) setActiveSeason(requestedSeason)
-  }, [requestedSeason, seasons])
-
-  useEffect(() => {
-    if (!data || !Number.isInteger(requestedSeason) || requestedSeason <= 0 || !Number.isInteger(requestedEpisode) || requestedEpisode <= 0) return
-    if (activeSeason !== requestedSeason) return
-    const timer = window.setTimeout(() => {
-      setPicking({
-        id: data.id,
-        mediaType: 'tv',
-        title,
-        originalTitle: data.original_name ?? '',
-        year,
-        posterPath: data.poster_path,
-        season: requestedSeason,
-        episode: requestedEpisode,
-      })
-    }, 150)
-    return () => window.clearTimeout(timer)
-  }, [activeSeason, data, requestedEpisode, requestedSeason, title, year])
 
   function playEpisode(season: number, episode: number) {
     setPicking({
