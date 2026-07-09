@@ -332,8 +332,6 @@ export async function GET(req: NextRequest) {
     const targetNorm = normalizeTitleForCompare(title ?? originalTitle ?? query ?? '')
     const targetWords = (title ?? originalTitle ?? query ?? '').toLowerCase().split(/\s+/).filter((w) => w.length > 2)
     const targetYear = year ? Number(year) : undefined
-    const targetSeason = seasonParam ? Number(seasonParam) : undefined
-    const targetEpisode = episodeParam ? Number(episodeParam) : undefined
 
     function scoreItem(item: Norm) {
       let score = 0
