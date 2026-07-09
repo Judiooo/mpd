@@ -1,9 +1,10 @@
 'use client'
 
-import { use, useState } from 'react'
+import { use, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import { Play } from 'lucide-react'
-import { BookmarkButton, CastRow, DetailHeader, RecommendationsRow } from '@/components/media-detail'
+import { BookmarkButton, CastRow, DetailHeader, RecommendationsRow, RelatedItemsRow } from '@/components/media-detail'
 import { ReleasePicker, type PlayTarget } from '@/components/release-picker'
 import { mediaYear, stillUrl, tmdbFetcher, type TmdbEpisode, type TmdbTvDetails } from '@/lib/tmdb'
 import { cn } from '@/lib/utils'
@@ -70,10 +71,13 @@ function EpisodeList({
 
 export default function TvPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const searchParams = useSearchParams()
   const [picking, setPicking] = useState<PlayTarget | null>(null)
   const [activeSeason, setActiveSeason] = useState<number | null>(null)
+  const requestedSeason = Number(searchParams.get('season'))
+  const requestedEpisode = Number(searchParams.get('episode'))
   const { data, error, isLoading } = useSWR<TmdbTvDetails>(
-    `tv/${id}?append_to_response=credits,videos,recommendations`,
+    `tv/${id}?append_to_response=credits,videos,recommendations,similar,collections`,
     tmdbFetcher,
   )
 
@@ -103,6 +107,30 @@ export default function TvPage({ params }: { params: Promise<{ id: string }> }) 
   const year = mediaYear(data)
   const seasons = data.seasons.filter((s) => s.season_number > 0 && s.episode_count > 0)
   const currentSeason = activeSeason ?? seasons[0]?.season_number ?? 1
+
+  useEffect(() => {
+    if (!Number.isInteger(requestedSeason) || requestedSeason <= 0) return
+    const seasonExists = seasons.some((s) => s.season_number === requestedSeason)
+    if (seasonExists) setActiveSeason(requestedSeason)
+  }, [requestedSeason, seasons])
+
+  useEffect(() => {
+    if (!data || !Number.isInteger(requestedSeason) || requestedSeason <= 0 || !Number.isInteger(requestedEpisode) || requestedEpisode <= 0) return
+    if (activeSeason !== requestedSeason) return
+    const timer = window.setTimeout(() => {
+      setPicking({
+        id: data.id,
+        mediaType: 'tv',
+        title,
+        originalTitle: data.original_name ?? '',
+        year,
+        posterPath: data.poster_path,
+        season: requestedSeason,
+        episode: requestedEpisode,
+      })
+    }, 150)
+    return () => window.clearTimeout(timer)
+  }, [activeSeason, data, requestedEpisode, requestedSeason, title, year])
 
   function playEpisode(season: number, episode: number) {
     setPicking({
@@ -172,7 +200,10 @@ export default function TvPage({ params }: { params: Promise<{ id: string }> }) 
 
       <div className="mx-auto max-w-[1800px]">
         <CastRow credits={data.credits} />
-        <RecommendationsRow items={data.recommendations?.results} mediaType="tv" />
+        {data.collections?.parts && data.collections.parts.length > 1 && (
+          <RelatedItemsRow items={data.collections.parts.filter((item) => item.id !== data.id)} mediaType="tv" title="Сиквелы, приквелы и спинофы" />
+        )}
+        <RecommendationsRow items={data.similar?.results ?? data.recommendations?.results} mediaType="tv" />
       </div>
 
       {picking && <ReleasePicker target={picking} onClose={() => setPicking(null)} />}

@@ -42,6 +42,9 @@ export interface TmdbMovieDetails extends TmdbMedia {
   credits?: TmdbCredits
   videos?: TmdbVideos
   recommendations?: { results: TmdbMedia[] }
+  similar?: { results: TmdbMedia[] }
+  belongs_to_collection?: { id: number; name: string; poster_path: string | null; backdrop_path: string | null } | null
+  collections?: { parts: TmdbMedia[] }
 }
 
 export interface TmdbSeason {
@@ -76,6 +79,9 @@ export interface TmdbTvDetails extends TmdbMedia {
   credits?: TmdbCredits
   videos?: TmdbVideos
   recommendations?: { results: TmdbMedia[] }
+  similar?: { results: TmdbMedia[] }
+  belongs_to_collection?: { id: number; name: string; poster_path: string | null; backdrop_path: string | null } | null
+  collections?: { parts: TmdbMedia[] }
 }
 
 export interface TmdbListResponse {

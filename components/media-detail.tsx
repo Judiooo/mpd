@@ -160,3 +160,18 @@ export function RecommendationsRow({ items, mediaType }: { items?: TmdbMedia[]; 
     </section>
   )
 }
+
+export function RelatedItemsRow({ items, mediaType, title }: { items?: TmdbMedia[]; mediaType: 'movie' | 'tv'; title: string }) {
+  const list = items?.filter((m) => m.poster_path).slice(0, 15) ?? []
+  if (list.length < 2) return null
+  return (
+    <section className="mt-10">
+      <h2 className="mb-3 px-4 text-lg font-semibold md:px-8 md:text-xl">{title}</h2>
+      <div className="no-scrollbar flex gap-3 overflow-x-auto px-4 pb-2 md:gap-4 md:px-8">
+        {list.map((m) => (
+          <MediaCard key={m.id} media={m} mediaType={m.media_type === 'tv' || m.media_type === 'movie' ? m.media_type : mediaType} />
+        ))}
+      </div>
+    </section>
+  )
+}

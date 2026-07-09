@@ -38,7 +38,11 @@ export function ContinueWatchingRow() {
           return (
             <Link
               key={progressKey(item.id, item.mediaType, item.season, item.episode)}
-              href={`/${item.mediaType}/${item.id}`}
+              href={
+                item.mediaType === 'tv' && item.season != null && item.episode != null
+                  ? `/tv/${item.id}?season=${item.season}&episode=${item.episode}`
+                  : `/${item.mediaType}/${item.id}`
+              }
               className="tv-focus group block w-48 shrink-0 rounded-lg md:w-60"
             >
               <div className="relative aspect-video overflow-hidden rounded-lg bg-card">

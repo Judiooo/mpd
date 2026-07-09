@@ -3,7 +3,7 @@
 import { use, useState } from 'react'
 import useSWR from 'swr'
 import { Play } from 'lucide-react'
-import { BookmarkButton, CastRow, DetailHeader, RecommendationsRow } from '@/components/media-detail'
+import { BookmarkButton, CastRow, DetailHeader, RecommendationsRow, RelatedItemsRow } from '@/components/media-detail'
 import { ReleasePicker, type PlayTarget } from '@/components/release-picker'
 import { mediaYear, tmdbFetcher, type TmdbMovieDetails } from '@/lib/tmdb'
 
@@ -11,7 +11,7 @@ export default function MoviePage({ params }: { params: Promise<{ id: string }> 
   const { id } = use(params)
   const [picking, setPicking] = useState(false)
   const { data, error, isLoading } = useSWR<TmdbMovieDetails>(
-    `movie/${id}?append_to_response=credits,videos,recommendations`,
+    `movie/${id}?append_to_response=credits,videos,recommendations,similar,collections`,
     tmdbFetcher,
   )
 
@@ -87,7 +87,10 @@ export default function MoviePage({ params }: { params: Promise<{ id: string }> 
       </DetailHeader>
       <div className="mx-auto max-w-[1800px]">
         <CastRow credits={data.credits} />
-        <RecommendationsRow items={data.recommendations?.results} mediaType="movie" />
+        {data.collections?.parts && data.collections.parts.length > 1 && (
+          <RelatedItemsRow items={data.collections.parts.filter((item) => item.id !== data.id)} mediaType="movie" title="Сиквелы, приквелы и спинофы" />
+        )}
+        <RecommendationsRow items={data.similar?.results ?? data.recommendations?.results} mediaType="movie" />
       </div>
       {picking && <ReleasePicker target={target} onClose={() => setPicking(false)} />}
     </main>
