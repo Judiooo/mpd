@@ -135,6 +135,15 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
 
 const SUBTITLE_COLORS = ['#ffffff', '#ffd54a', '#4ade80', '#60a5fa', '#f87171']
 
+const JACKETT_INDEXERS = [
+  { id: 'rutracker', title: 'RuTracker' },
+  { id: 'rutor', title: 'RuTor' },
+  { id: 'kinozal', title: 'Kinozal' },
+  { id: 'megapeer', title: 'MegaPeer' },
+  { id: 'nnmclub', title: 'NNMClub' },
+  { id: 'anilibria', title: 'Anilibria' },
+]
+
 type TestState = 'idle' | 'testing' | 'ok' | 'fail'
 
 function TestButton({ state, label, onClick }: { state: TestState; label: string; onClick: () => void }) {
@@ -164,6 +173,13 @@ export default function SettingsPage() {
     updateSettings({ [key]: value } as Partial<AppSettings>)
   }
 
+  function toggleIndexer(indexer: string) {
+  set('jackettIndexers', {
+    ...settings.jackettIndexers,
+    [indexer]: !settings.jackettIndexers[indexer],
+  })
+}
+
   async function testTorrserver() {
     setTsTest('testing')
     try {
@@ -177,7 +193,12 @@ export default function SettingsPage() {
   async function testJackett() {
     setJkTest('testing')
     try {
-      await searchReleases(settings.jackettUrl, settings.jackettApiKey, 'test')
+      await searchReleases(
+        settings.jackettUrl,
+        settings.jackettApiKey,
+        'test',
+        settings.jackettIndexers,
+      )
       setJkTest('ok')
     } catch {
       setJkTest('fail')
@@ -247,6 +268,21 @@ export default function SettingsPage() {
           </Field>
           <Field label="API-ключ Jackett">
             <TextField value={settings.jackettApiKey} onChange={(v) => set('jackettApiKey', v)} placeholder="API key" />
+          </Field>
+          <Field
+            label="Используемые индексаторы"
+            hint="Поиск будет выполняться только по выбранным индексаторам."
+          >
+            <div className="grid grid-cols-2 gap-2">
+              {JACKETT_INDEXERS.map((indexer) => (
+                <Toggle
+                  key={indexer.id}
+                  checked={settings.jackettIndexers[indexer.id] ?? false}
+                  onChange={() => toggleIndexer(indexer.id)}
+                  label={indexer.title}
+                />
+              ))}
+            </div>
           </Field>
           <TestButton
             state={jkTest}

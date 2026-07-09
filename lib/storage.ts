@@ -4,6 +4,7 @@ export interface AppSettings {
   torrserverUrl: string
   jackettUrl: string
   jackettApiKey: string
+  jackettIndexers: Record<string, boolean>
   tmdbApiKey: string
   autoplay: boolean
   preferredQuality: 'any' | '2160p' | '1080p' | '720p'
@@ -24,6 +25,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   torrserverUrl: '',
   jackettUrl: '',
   jackettApiKey: '',
+  jackettIndexers: {
+    rutracker: true,
+    rutor: true,
+    kinozal: true,
+    megapeer: true,
+    nnmclub: true,
+    anilibria: false,
+  },
   tmdbApiKey: '',
   autoplay: true,
   preferredQuality: 'any',

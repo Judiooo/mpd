@@ -49,10 +49,28 @@ export async function searchReleases(
   jackettUrl: string,
   apiKey: string,
   query: string,
+  indexers?: Record<string, boolean>,
 ): Promise<JackettRelease[]> {
-  const params = new URLSearchParams({ url: jackettUrl, apikey: apiKey, query })
+  const params = new URLSearchParams({
+    url: jackettUrl,
+    apikey: apiKey,
+    query,
+  })
+
+  if (indexers) {
+    params.set('indexers', JSON.stringify(indexers))
+  }
+
   const res = await fetch(`/api/jackett/search?${params}`)
-  const data = (await res.json()) as { results?: JackettRelease[]; error?: string }
-  if (!res.ok) throw new Error(data.error ?? 'Ошибка поиска релизов')
+
+  const data = (await res.json()) as {
+    results?: JackettRelease[]
+    error?: string
+  }
+
+  if (!res.ok) {
+    throw new Error(data.error ?? 'Ошибка поиска релизов')
+  }
+
   return data.results ?? []
 }
