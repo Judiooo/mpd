@@ -29,13 +29,16 @@ export default function CategoryPageClient() {
     if (!el) return
     const obs = new IntersectionObserver((entries) => {
       for (const e of entries) {
-        if (e.isIntersecting) setSize(size + 1)
+        if (e.isIntersecting) {
+          setSize((s) => s + 1)
+        }
       }
     }, { rootMargin: '300px' })
     obs.observe(el)
     return () => obs.disconnect()
+    // only recreate when sentinel element changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sentinel.current, size])
+  }, [sentinel.current, setSize])
 
   return (
     <main className="mx-auto max-w-[1200px] p-6">
