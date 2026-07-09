@@ -35,8 +35,10 @@ function normalizeTitleForCompare(s: string) {
 
 function isIrrelevantTitle(title: string) {
   const t = title.toLowerCase()
-  const bad = ['trailer', 'трейлер', 'soundtrack', 'саундтрек', 'ost', 'бонус', 'extras', 'песня', 'mp3']
-  return bad.some((b) => t.includes(b))
+  const bad = ['trailer', 'трейлер', 'soundtrack', 'саундтрек', 'ost', 'бонус', 'extras', 'песня', 'mp3', 'сборник', 'collection', 'boxset']
+  if (bad.some((b) => t.includes(b))) return true
+  if (/\b(mp3|flac|aac|wav)\b/.test(t)) return true
+  return false
 }
 
 async function searchIndexer(
@@ -93,6 +95,8 @@ export async function GET(req: NextRequest) {
   const title = req.nextUrl.searchParams.get('title')
   const originalTitle = req.nextUrl.searchParams.get('originalTitle')
   const year = req.nextUrl.searchParams.get('year')
+  const seasonParam = req.nextUrl.searchParams.get('season')
+  const episodeParam = req.nextUrl.searchParams.get('episode')
   const mediaType = req.nextUrl.searchParams.get('mediaType')
   const rawIndexers = req.nextUrl.searchParams.get('indexers')
 
@@ -164,6 +168,7 @@ export async function GET(req: NextRequest) {
       if (r.status === 'fulfilled') allResults.push(...r.value)
     }
 
+
     // normalize and filter
     type Norm = {
       title: string
@@ -177,6 +182,51 @@ export async function GET(req: NextRequest) {
       publishDate: string
       category: string
       indexer?: string
+      _quality?: string
+      _voice?: string | null
+      _seasonEp?: { season?: number; episode?: number }
+    }
+
+    function detectQualityFromTitle(s: string) {
+      const t = s.toLowerCase()
+      if (/2160p|4k|uhd/.test(t)) return '2160p'
+      if (/1080p|1080i|fullhd|fhd/.test(t)) return '1080p'
+      if (/720p|hd(?!r)/.test(t)) return '720p'
+      if (/480p|dvdrip|tvrip|satrip/.test(t)) return '480p'
+      return 'unknown'
+    }
+
+    function detectVoiceFromTitle(s: string) {
+      const t = s.toLowerCase()
+      if (/дубляж|dub|дублирован/.test(t)) return 'Дубляж'
+      if (/lostfilm/.test(t)) return 'LostFilm'
+      if (/hdrezka/.test(t)) return 'HDRezka'
+      if (/кубик в кубе|kubik/.test(t)) return 'Кубик в Кубе'
+      if (/многоголос|mvo/.test(t)) return 'Многоголосый'
+      if (/двухголос|dvo/.test(t)) return 'Двухголосый'
+      if (/одноголос|avo|vo /.test(t)) return 'Одноголосый'
+      if (/субтитр|sub/.test(t)) return 'Субтитры'
+      return null
+    }
+
+    function extractSeasonEpisode(s: string): { season?: number; episode?: number } {
+      const t = s.toLowerCase()
+      const seMatch = t.match(/s(\d{1,2})e(\d{1,2})/)
+      if (seMatch) return { season: Number(seMatch[1]), episode: Number(seMatch[2]) }
+      const seasonMatch = t.match(/season\s*(\d{1,2})/) || t.match(/(\d{1,2}) сезон/)
+      if (seasonMatch) return { season: Number(seasonMatch[1]) }
+      const simpleS = t.match(/\b(сезон|season)\s*(\d{1,2})\b/)
+      if (simpleS) return { season: Number(simpleS[2]) }
+      return {}
+    }
+
+    function getIndexerFromTracker(tracker?: string) {
+      if (!tracker) return undefined
+      const t = tracker.toLowerCase()
+      for (const idx of INDEXERS) {
+        if (t.includes(idx)) return idx
+      }
+      return undefined
     }
 
     const mapped: Norm[] = allResults
@@ -193,7 +243,10 @@ export async function GET(req: NextRequest) {
         infoHash: r.InfoHash,
         publishDate: r.PublishDate,
         category: r.CategoryDesc,
-        indexer: r.Tracker?.toLowerCase?.(),
+        indexer: getIndexerFromTracker(r.Tracker),
+        _quality: detectQualityFromTitle(r.Title),
+        _voice: detectVoiceFromTitle(r.Title),
+        _seasonEp: extractSeasonEpisode(r.Title),
       }))
 
     // deduplicate by infoHash, then by normalized title+size
@@ -213,16 +266,75 @@ export async function GET(req: NextRequest) {
       resultsDedup.push(r)
     }
 
-    // scoring/ranking
+    // scoring/ranking with multiple factors
+    const targetNorm = normalizeTitleForCompare(title ?? originalTitle ?? query ?? '')
+    const targetWords = (title ?? originalTitle ?? query ?? '').toLowerCase().split(/\s+/).filter((w) => w.length > 2)
+    const targetYear = year ? Number(year) : undefined
+    const targetSeason = seasonParam ? Number(seasonParam) : undefined
+    const targetEpisode = episodeParam ? Number(episodeParam) : undefined
+
     function scoreItem(item: Norm) {
       let score = 0
+
+      const itemNorm = normalizeTitleForCompare(item.title)
+
+      // title exact / contains / word overlap
+      if (itemNorm === targetNorm && targetNorm.length > 0) {
+        score += 40
+      } else if (targetNorm && itemNorm.includes(targetNorm)) {
+        score += 20
+      } else {
+        // word overlap
+        const itemWords = itemNorm.split(/\s+/).filter(Boolean)
+        const matches = targetWords.filter((w) => itemWords.includes(w)).length
+        if (targetWords.length > 0) {
+          const ratio = matches / targetWords.length
+          score += Math.round(ratio * 15)
+        }
+      }
+
+      // year match
+      if (targetYear) {
+        if (item.publishDate && item.publishDate.includes(String(targetYear))) score += 10
+        if (item.title && item.title.includes(String(targetYear))) score += 10
+      }
+
+      // season/episode matching for TV
+      if (mediaType === 'tv' && targetSeason != null) {
+        const s = item._seasonEp?.season
+        const e = item._seasonEp?.episode
+        if (s != null) {
+          if (s === targetSeason) {
+            score += 12
+            if (targetEpisode != null && e != null && e === targetEpisode) score += 6
+          } else {
+            score -= 10
+          }
+        }
+      }
+
+      // quality
+      const q = item._quality
+      if (q === '2160p') score += 6
+      else if (q === '1080p') score += 4
+      else if (q === '720p') score += 2
+      else if (q === '480p') score += 1
+
+      // voice
+      const v = item._voice
+      if (v === 'LostFilm' || v === 'Дубляж') score += 3
+      if (v === 'HDRezka') score += 2
+
       // seeders weight
       score += Math.log10((item.seeders || 0) + 1) * 10
-      // prefer larger size slightly
+
+      // size slight favor
       score += Math.log10((item.size || 0) + 1) * 0.5
+
       // indexer priority
       const idx = item.indexer ? INDEXER_PRIORITY[item.indexer] ?? 100 : 100
       score += Math.max(0, 20 - idx)
+
       return score
     }
 
