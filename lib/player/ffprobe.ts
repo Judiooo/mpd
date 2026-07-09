@@ -59,16 +59,15 @@ return value.trim();
 function runFFprobe(input: string): Promise<FFprobeResult> {
 return new Promise((resolve, reject) => {
 const proc = spawn("ffprobe", [
-"-v",
-"quiet",
-"-print_format",
-"json",
-"-show_streams",
-"-show_format",
-input,
+  "-v",
+  "quiet",
+  "-print_format",
+  "json",
+  "-show_streams",
+  "-show_format",
+  input,
 ]);
 
-```
 let stdout = "";
 let stderr = "";
 
@@ -96,7 +95,6 @@ proc.on("close", (code) => {
     reject(new Error("Failed to parse ffprobe JSON output"));
   }
 });
-```
 
 });
 }

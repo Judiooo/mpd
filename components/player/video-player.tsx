@@ -23,6 +23,7 @@ import {
   VolumeX,
 } from 'lucide-react'
 import { tsGetTorrent, type TorrentInfo } from '@/lib/torrserver'
+import type { MediaTrack } from '@/lib/player/ffprobe'
 import { useSettings } from '@/lib/settings-context'
 import { saveProgress, type WatchProgress } from '@/lib/storage'
 import { cn } from '@/lib/utils'
@@ -89,7 +90,6 @@ export function VideoPlayer({
   const [playing, setPlaying] = useState(false)
   const [buffering, setBuffering] = useState(true)
   const [currentTime, setCurrentTime] = useState(0)
-  const [duration, setDuration] = useState(0)
   const [buffered, setBuffered] = useState(0)
   const [muted, setMuted] = useState(false)
   const [rate, setRate] = useState(1)
@@ -100,6 +100,9 @@ export function VideoPlayer({
   const [activeAudio, setActiveAudio] = useState(0)
   const [textTracks, setTextTracks] = useState<TrackOption[]>([])
   const [activeText, setActiveText] = useState(-1)
+  const [streamOffset, setStreamOffset] = useState(startPosition)
+  const [totalDuration, setTotalDuration] = useState(0)
+  const [segmentDuration, setSegmentDuration] = useState(0)
   const [stats, setStats] = useState<TorrentInfo | null>(null)
   const [showStats, setShowStats] = useState(false)
   const [fatalError, setFatalError] = useState<string | null>(null)
@@ -125,11 +128,28 @@ export function VideoPlayer({
     (delta: number) => {
       const v = videoRef.current
       if (!v) return
-      v.currentTime = Math.max(0, Math.min(v.duration || Infinity, v.currentTime + delta))
+      const effectiveDuration = totalDuration || segmentDuration || Infinity
+      const target = Math.max(0, Math.min(effectiveDuration, currentTime + delta))
+      v.currentTime = Math.max(0, target - streamOffset)
       showControls()
     },
-    [showControls],
+    [currentTime, segmentDuration, showControls, streamOffset, totalDuration],
   )
+
+  const buildProxyUrl = useCallback(
+    (audio: number, subtitle: number, start: number) => {
+      const params = new URLSearchParams({
+        url: src,
+        audio: String(audio),
+      })
+      if (subtitle >= 0) params.set('subtitle', String(subtitle))
+      if (start > 0) params.set('start', String(Math.floor(start)))
+      return `/api/player/stream?${params.toString()}`
+    },
+    [src],
+  )
+
+  const proxySrc = buildProxyUrl(activeAudio, activeText, streamOffset)
 
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
@@ -140,55 +160,80 @@ export function VideoPlayer({
     showControls()
   }, [showControls])
 
+  // Fetch audio/subtitle metadata for the source
+  useEffect(() => {
+    let active = true
+
+    async function loadMediaInfo() {
+      try {
+        const response = await fetch(`/api/player/info?url=${encodeURIComponent(src)}`)
+        if (!active) return
+        if (!response.ok) {
+          const body = await response.text()
+          throw new Error(body || 'Не удалось получить информацию о медиа')
+        }
+
+        const data = (await response.json()) as {
+          duration: number
+          audioTracks: MediaTrack[]
+          subtitleTracks: MediaTrack[]
+        }
+
+        const audioOpts = data.audioTracks.map((track, index) => {
+          const label = track.title || track.language || `${track.codec.toUpperCase()} ${index + 1}`
+          return { id: index, label }
+        })
+
+        const subtitleOpts = data.subtitleTracks.map((track, index) => {
+          const label = track.title || track.language || `${track.codec.toUpperCase()} ${index + 1}`
+          return { id: index, label }
+        })
+
+        if (!active) return
+
+        setAudioTracks(audioOpts)
+        setTextTracks(subtitleOpts)
+        setTotalDuration(data.duration || 0)
+
+        if (audioOpts.length > 0) {
+          const preferredAudio = audioOpts.findIndex((track) => trackMatchesLanguage(track.label, '', settings.audioLanguage))
+          if (preferredAudio >= 0) setActiveAudio(preferredAudio)
+        }
+
+        if (subtitleOpts.length > 0 && settings.subtitlesEnabled) {
+          const preferredSub = subtitleOpts.findIndex((track) => trackMatchesLanguage(track.label, '', settings.subtitleLanguage))
+          if (preferredSub >= 0) setActiveText(preferredSub)
+        }
+      } catch (err) {
+        console.error(err)
+        if (active) {
+          setFatalError(
+            'Не удалось получить информацию о дорожках. Проверьте доступность источника и работоспособность FFmpeg-плана.',
+          )
+        }
+      }
+    }
+
+    loadMediaInfo()
+    return () => {
+      active = false
+    }
+  }, [src, settings.audioLanguage, settings.subtitleLanguage, settings.subtitlesEnabled])
+
   // Video element listeners
   useEffect(() => {
     const v = videoRef.current
     if (!v) return
 
     const onLoaded = () => {
-      setDuration(v.duration)
-      if (startPosition > 0 && startPosition < v.duration - 30) v.currentTime = startPosition
-      // enumerate audio tracks (non-standard API, works in Chromium/Tizen)
-      const at = (v as HTMLVideoElement & { audioTracks?: { length: number; [i: number]: { label: string; language: string; enabled: boolean } } }).audioTracks
-      if (at && at.length > 1) {
-        const opts: TrackOption[] = []
-        let preferred = -1
-        for (let i = 0; i < at.length; i++) {
-          opts.push({ id: i, label: at[i].label || at[i].language || `Дорожка ${i + 1}` })
-          if (at[i].enabled) setActiveAudio(i)
-          if (preferred < 0 && trackMatchesLanguage(at[i].label ?? '', at[i].language ?? '', settings.audioLanguage)) {
-            preferred = i
-          }
-        }
-        setAudioTracks(opts)
-        if (preferred >= 0) {
-          for (let i = 0; i < at.length; i++) at[i].enabled = i === preferred
-          setActiveAudio(preferred)
-        }
-      }
-      const tt = v.textTracks
-      if (tt.length > 0) {
-        const opts: TrackOption[] = []
-        let preferred = -1
-        for (let i = 0; i < tt.length; i++) {
-          opts.push({ id: i, label: tt[i].label || tt[i].language || `Субтитры ${i + 1}` })
-          tt[i].mode = 'hidden'
-          if (preferred < 0 && trackMatchesLanguage(tt[i].label ?? '', tt[i].language ?? '', settings.subtitleLanguage)) {
-            preferred = i
-          }
-        }
-        setTextTracks(opts)
-        const pick = preferred >= 0 ? preferred : 0
-        if (settings.subtitlesEnabled && opts.length > 0) {
-          tt[pick].mode = 'showing'
-          setActiveText(pick)
-        }
-      }
+      setSegmentDuration(v.duration)
+      setTotalDuration((current) => current || v.duration + streamOffset)
       if (settings.autoplay) v.play().catch(() => {})
     }
     const onTime = () => {
-      setCurrentTime(v.currentTime)
-      if (v.buffered.length > 0) setBuffered(v.buffered.end(v.buffered.length - 1))
+      const absoluteTime = streamOffset + v.currentTime
+      setCurrentTime(absoluteTime)
+      if (v.buffered.length > 0) setBuffered(streamOffset + v.buffered.end(v.buffered.length - 1))
     }
     const onPlay = () => {
       setPlaying(true)
@@ -223,16 +268,16 @@ export function VideoPlayer({
       v.removeEventListener('error', onError)
       v.removeEventListener('ended', onVideoEnded)
     }
-  }, [startPosition, settings.autoplay, settings.subtitlesEnabled, settings.audioLanguage, settings.subtitleLanguage, onEnded])
+  }, [streamOffset, settings.autoplay, settings.subtitlesEnabled, settings.audioLanguage, settings.subtitleLanguage, onEnded])
 
   // Save progress every 10 seconds and on unmount
   useEffect(() => {
     const save = () => {
       const v = videoRef.current
-      if (!v || !v.duration || v.currentTime < 5) return
+      if (!v || v.currentTime < 5) return
       saveProgress(progressStorageKey, {
-        position: Math.floor(v.currentTime),
-        duration: Math.floor(v.duration),
+        position: Math.floor(streamOffset + v.currentTime),
+        duration: Math.floor(totalDuration || v.duration),
         updatedAt: Date.now(),
         ...resumeContext,
       })
@@ -342,19 +387,18 @@ export function VideoPlayer({
   }, [])
 
   function selectAudio(id: number) {
-    const v = videoRef.current as (HTMLVideoElement & { audioTracks?: { length: number; [i: number]: { enabled: boolean } } }) | null
-    if (v?.audioTracks) {
-      for (let i = 0; i < v.audioTracks.length; i++) v.audioTracks[i].enabled = i === id
-      setActiveAudio(id)
-    }
+    const v = videoRef.current
+    const position = v ? streamOffset + v.currentTime : streamOffset
+    setActiveAudio(id)
+    setStreamOffset(position)
     setMenu('none')
   }
 
   function selectText(id: number) {
     const v = videoRef.current
-    if (!v) return
-    for (let i = 0; i < v.textTracks.length; i++) v.textTracks[i].mode = i === id ? 'showing' : 'hidden'
+    const position = v ? streamOffset + v.currentTime : streamOffset
     setActiveText(id)
+    setStreamOffset(position)
     setMenu('none')
   }
 
@@ -368,8 +412,9 @@ export function VideoPlayer({
     }
   }
 
-  const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0
-  const bufferedPct = duration > 0 ? (buffered / duration) * 100 : 0
+  const effectiveDuration = totalDuration || segmentDuration
+  const progressPct = effectiveDuration > 0 ? (currentTime / effectiveDuration) * 100 : 0
+  const bufferedPct = effectiveDuration > 0 ? (buffered / effectiveDuration) * 100 : 0
 
   if (fatalError) {
     return (
@@ -399,7 +444,7 @@ export function VideoPlayer({
       `}</style>
 
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-      <video ref={videoRef} src={src} className="h-screen w-full object-contain" muted={muted} crossOrigin="anonymous" playsInline />
+      <video ref={videoRef} src={proxySrc} className="h-screen w-full object-contain" muted={muted} crossOrigin="anonymous" playsInline />
 
       {buffering && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -454,15 +499,17 @@ export function VideoPlayer({
             tabIndex={0}
             aria-label="Позиция воспроизведения"
             aria-valuemin={0}
-            aria-valuemax={Math.floor(duration)}
+            aria-valuemax={Math.floor(totalDuration || segmentDuration)}
             aria-valuenow={Math.floor(currentTime)}
-            aria-valuetext={`${fmtTime(currentTime)} из ${fmtTime(duration)}`}
+            aria-valuetext={`${fmtTime(currentTime)} из ${fmtTime(totalDuration || segmentDuration)}`}
             onKeyDown={onSeekBarKey}
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect()
               const ratio = (e.clientX - rect.left) / rect.width
               const v = videoRef.current
-              if (v && duration) v.currentTime = ratio * duration
+              const effectiveDuration = totalDuration || v?.duration || 0
+              const target = ratio * effectiveDuration
+              if (v) v.currentTime = Math.max(0, Math.min(v.duration, target - streamOffset))
             }}
             className="tv-focus group relative h-6 cursor-pointer rounded"
           >
@@ -487,7 +534,7 @@ export function VideoPlayer({
               <RotateCw className="size-6" aria-hidden="true" />
             </button>
             <span className="ml-1 text-sm tabular-nums text-white md:text-base">
-              {fmtTime(currentTime)} / {fmtTime(duration)}
+              {fmtTime(currentTime)} / {fmtTime(effectiveDuration)}
             </span>
 
             <div className="ml-auto flex items-center gap-1 md:gap-2">

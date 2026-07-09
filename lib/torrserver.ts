@@ -81,6 +81,29 @@ export function streamUrl(serverUrl: string, hash: string, fileIndex: number, fi
   return `${base}/stream/${name}?link=${hash}&index=${fileIndex}&play`
 }
 
+export function proxyStreamUrl(
+  serverUrl: string,
+  hash: string,
+  fileIndex: number,
+  fileName: string,
+  audioTrack = 0,
+  subtitleTrack: number | null = null,
+  startTime = 0,
+): string {
+  const source = streamUrl(serverUrl, hash, fileIndex, fileName)
+  const params = new URLSearchParams({
+    url: source,
+    audio: String(audioTrack),
+  })
+  if (subtitleTrack !== null && subtitleTrack >= 0) {
+    params.set('subtitle', String(subtitleTrack))
+  }
+  if (startTime > 0) {
+    params.set('start', String(Math.floor(startTime)))
+  }
+  return `/api/player/stream?${params.toString()}`
+}
+
 // Try to match a series episode to a file path (S01E02, 1x02, «02 серия» patterns)
 export function matchEpisodeFile(files: TorrentFile[], season: number, episode: number): TorrentFile | null {
   const patterns = [
