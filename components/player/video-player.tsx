@@ -126,16 +126,30 @@ export function VideoPlayer({
     showControls()
   }, [showControls])
 
-  const seekBy = useCallback(
-    (delta: number) => {
+  const seekToAbsolute = useCallback(
+    (target: number) => {
       const v = videoRef.current
       if (!v) return
+      const currentAbsolute = streamOffset + v.currentTime
       const effectiveDuration = totalDuration || segmentDuration || Infinity
-      const target = Math.max(0, Math.min(effectiveDuration, currentTime + delta))
-      v.currentTime = Math.max(0, target - streamOffset)
+      const clamped = Math.max(0, Math.min(effectiveDuration, target))
+      const offsetEnd = streamOffset + v.duration
+      if (clamped < streamOffset || clamped > offsetEnd) {
+        restartStream(activeAudio, activeText, clamped)
+      } else {
+        v.currentTime = Math.max(0, Math.min(v.duration, clamped - streamOffset))
+      }
       showControls()
     },
-    [currentTime, segmentDuration, showControls, streamOffset, totalDuration],
+    [activeAudio, activeText, restartStream, segmentDuration, showControls, streamOffset, totalDuration],
+  )
+
+  const seekBy = useCallback(
+    (delta: number) => {
+      const target = currentTime + delta
+      seekToAbsolute(target)
+    },
+    [currentTime, seekToAbsolute],
   )
 
   const buildProxyUrl = useCallback(
@@ -608,10 +622,8 @@ export function VideoPlayer({
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect()
               const ratio = (e.clientX - rect.left) / rect.width
-              const v = videoRef.current
-              const effectiveDuration = totalDuration || v?.duration || 0
-              const target = ratio * effectiveDuration
-              if (v) v.currentTime = Math.max(0, Math.min(v.duration, target - streamOffset))
+              const target = ratio * (totalDuration || segmentDuration || 0)
+              seekToAbsolute(target)
             }}
             className="tv-focus group relative h-6 cursor-pointer rounded"
           >
@@ -626,6 +638,9 @@ export function VideoPlayer({
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
+            <button onClick={() => seekBy(-30)} aria-label="Назад 30 секунд" className="tv-focus rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white hover:bg-white/10">
+              «« 30s
+            </button>
             <button onClick={() => seekBy(-10)} aria-label="Назад 10 секунд" className="tv-focus rounded-lg p-2 text-white">
               <RotateCcw className="size-6" aria-hidden="true" />
             </button>
@@ -634,6 +649,9 @@ export function VideoPlayer({
             </button>
             <button onClick={() => seekBy(10)} aria-label="Вперёд 10 секунд" className="tv-focus rounded-lg p-2 text-white">
               <RotateCw className="size-6" aria-hidden="true" />
+            </button>
+            <button onClick={() => seekBy(30)} aria-label="Вперёд 30 секунд" className="tv-focus rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white hover:bg-white/10">
+              30s »»
             </button>
             <span className="ml-1 text-sm tabular-nums text-white md:text-base">
               {fmtTime(currentTime)} / {fmtTime(effectiveDuration)}
