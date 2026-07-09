@@ -103,6 +103,8 @@ export function VideoPlayer({
   const [streamOffset, setStreamOffset] = useState(startPosition)
   const [totalDuration, setTotalDuration] = useState(0)
   const [segmentDuration, setSegmentDuration] = useState(0)
+  const [restartInProgress, setRestartInProgress] = useState(false)
+  const [restartRetryCount, setRestartRetryCount] = useState(0)
   const [stats, setStats] = useState<TorrentInfo | null>(null)
   const [showStats, setShowStats] = useState(false)
   const [fatalError, setFatalError] = useState<string | null>(null)
@@ -389,17 +391,108 @@ export function VideoPlayer({
   function selectAudio(id: number) {
     const v = videoRef.current
     const position = v ? streamOffset + v.currentTime : streamOffset
-    setActiveAudio(id)
-    setStreamOffset(position)
     setMenu('none')
+    // restart stream with new audio track from current absolute position
+    restartStream(id, activeText, position)
   }
 
   function selectText(id: number) {
     const v = videoRef.current
     const position = v ? streamOffset + v.currentTime : streamOffset
-    setActiveText(id)
-    setStreamOffset(position)
     setMenu('none')
+    // restart stream with new subtitle track from current absolute position
+    restartStream(activeAudio, id, position)
+  }
+
+  // Restart the HTML5 video element by pointing it at a new proxy URL
+  // with requested audio/subtitle and start position. Preserves playback state.
+  function restartStream(newAudio: number, newSubtitle: number, absolutePosition: number, maxRetries = 2) {
+    const v = videoRef.current
+    const start = Math.max(0, Math.floor(absolutePosition))
+
+    // If no video element yet, just update state
+    if (!v) {
+      setActiveAudio(newAudio)
+      setActiveText(newSubtitle)
+      setStreamOffset(start)
+      return
+    }
+
+    let attempt = 0
+    setRestartRetryCount(0)
+    setRestartInProgress(true)
+    setFatalError(null)
+
+    const wasPlaying = !v.paused && !v.ended
+
+    const doAttempt = async () => {
+      attempt++
+      setRestartRetryCount(attempt - 1)
+
+      // stop and clear current source
+      try {
+        v.pause()
+      } catch {}
+      try {
+        v.removeAttribute('src')
+        // some browsers need calling load after clearing src
+        v.load()
+      } catch {}
+
+      const newSrc = buildProxyUrl(newAudio, newSubtitle, start)
+
+      // optimistic state update
+      setActiveAudio(newAudio)
+      setActiveText(newSubtitle)
+      setStreamOffset(start)
+
+      let handled = false
+
+      const onLoaded = () => {
+        if (handled) return
+        handled = true
+        cleanupListeners()
+        setRestartInProgress(false)
+        setRestartRetryCount(attempt - 1)
+        // server should already seek to start; ensure we play if it was playing
+        try {
+          if (wasPlaying) v.play().catch(() => {})
+        } catch {}
+      }
+
+      const onError = () => {
+        if (handled) return
+        handled = true
+        cleanupListeners()
+        if (attempt <= maxRetries) {
+          // exponential backoff
+          const delay = 300 * Math.pow(2, attempt - 1)
+          setTimeout(doAttempt, delay)
+        } else {
+          setRestartInProgress(false)
+          setFatalError('Не удалось перезапустить поток после нескольких попыток')
+        }
+      }
+
+      const cleanupListeners = () => {
+        v.removeEventListener('loadedmetadata', onLoaded)
+        v.removeEventListener('error', onError)
+      }
+
+      v.addEventListener('loadedmetadata', onLoaded)
+      v.addEventListener('error', onError)
+
+      // assign new src and load
+      try {
+        v.src = newSrc
+        v.load()
+      } catch (err) {
+        cleanupListeners()
+        onError()
+      }
+    }
+
+    doAttempt()
   }
 
   function onSeekBarKey(e: React.KeyboardEvent) {
@@ -449,6 +542,15 @@ export function VideoPlayer({
       {buffering && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <Loader2 className="size-14 animate-spin text-primary" aria-hidden="true" />
+        </div>
+      )}
+
+      {restartInProgress && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60">
+          <div className="flex flex-col items-center gap-2 rounded-lg bg-background/90 p-4">
+            <Loader2 className="size-10 animate-spin text-primary" aria-hidden="true" />
+            <p className="text-sm">Перезапуск потока... (попытка {restartRetryCount + 1})</p>
+          </div>
         </div>
       )}
 

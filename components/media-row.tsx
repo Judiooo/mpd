@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import useSWR from 'swr'
 import { MediaCard } from '@/components/media-card'
 import { tmdbFetcher, type TmdbListResponse } from '@/lib/tmdb'
@@ -24,9 +25,15 @@ export function MediaRow({
     )
   }
 
+  const params = new URLSearchParams({ path })
+  if (mediaType) params.set('media', mediaType)
+  const href = `/category?${params.toString()}`
+
   return (
     <section className="min-w-0">
-      <h2 className="mb-3 px-4 text-lg font-semibold md:px-8 md:text-xl">{title}</h2>
+      <h2 className="mb-3 px-4 text-lg font-semibold md:px-8 md:text-xl">
+        <Link href={href} className="hover:underline">{title}</Link>
+      </h2>
       <div className="no-scrollbar flex gap-3 overflow-x-auto px-4 pb-2 md:gap-4 md:px-8">
         {isLoading &&
           Array.from({ length: 8 }).map((_, i) => (

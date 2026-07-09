@@ -1,8 +1,10 @@
 'use client'
+'use client'
 
 import Link from 'next/link'
 import useSWR from 'swr'
-import { Info, Play, Star } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Info, Play, Star, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   backdropUrl,
   mediaTitle,
@@ -12,13 +14,21 @@ import {
 } from '@/lib/tmdb'
 
 export function Hero() {
-  const { data } = useSWR<TmdbListResponse>('trending/all/week', tmdbFetcher)
-  const item = data?.results.find((m) => m.backdrop_path && m.media_type !== 'person')
+  const { data } = useSWR<TmdbListResponse>('movie/popular', tmdbFetcher)
+  const items = (data?.results ?? []).filter((m) => m.backdrop_path)
+  const [index, setIndex] = useState(0)
 
-  if (!item) {
+  useEffect(() => {
+    if (!items.length) return
+    const t = setInterval(() => setIndex((i) => (i + 1) % items.length), 7000)
+    return () => clearInterval(t)
+  }, [items.length])
+
+  if (items.length === 0) {
     return <div className="mx-4 mt-4 aspect-[16/7] animate-pulse rounded-xl bg-card md:mx-8" />
   }
 
+  const item = items[index]
   const type = item.media_type === 'tv' ? 'tv' : 'movie'
   const title = mediaTitle(item)
   const year = mediaYear(item)
@@ -27,11 +37,7 @@ export function Hero() {
     <section className="relative mx-4 mt-4 overflow-hidden rounded-xl md:mx-8" aria-label="Рекомендуемое">
       <div className="relative aspect-[16/9] w-full sm:aspect-[16/7]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={backdropUrl(item.backdrop_path, 'w1280') ?? ''}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+        <img src={backdropUrl(item.backdrop_path, 'w1280') ?? ''} alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 flex flex-col gap-3 p-5 md:p-10">
           <h1 className="max-w-2xl text-2xl font-bold text-balance md:text-4xl lg:text-5xl">{title}</h1>
@@ -45,26 +51,25 @@ export function Hero() {
             {year && <span>{year}</span>}
             <span>{type === 'tv' ? 'Сериал' : 'Фильм'}</span>
           </div>
-          <p className="hidden max-w-xl text-sm leading-relaxed text-foreground/80 md:line-clamp-3 md:text-base">
-            {item.overview}
-          </p>
+          <p className="hidden max-w-xl text-sm leading-relaxed text-foreground/80 md:line-clamp-3 md:text-base">{item.overview}</p>
           <div className="mt-1 flex gap-3">
-            <Link
-              href={`/${type}/${item.id}`}
-              className="tv-focus flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-semibold text-primary-foreground md:px-6 md:py-3"
-            >
+            <Link href={`/${type}/${item.id}`} className="tv-focus flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-semibold text-primary-foreground md:px-6 md:py-3">
               <Play className="size-5 fill-primary-foreground" aria-hidden="true" />
               Смотреть
             </Link>
-            <Link
-              href={`/${type}/${item.id}`}
-              className="tv-focus flex items-center gap-2 rounded-lg bg-secondary px-5 py-2.5 font-semibold text-secondary-foreground md:px-6 md:py-3"
-            >
+            <Link href={`/${type}/${item.id}`} className="tv-focus flex items-center gap-2 rounded-lg bg-secondary px-5 py-2.5 font-semibold text-secondary-foreground md:px-6 md:py-3">
               <Info className="size-5" aria-hidden="true" />
               Подробнее
             </Link>
           </div>
         </div>
+
+        <button onClick={() => setIndex((idx) => (idx - 1 + items.length) % items.length)} className="absolute left-4 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white">
+          <ChevronLeft className="size-6" />
+        </button>
+        <button onClick={() => setIndex((idx) => (idx + 1) % items.length)} className="absolute right-4 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white">
+          <ChevronRight className="size-6" />
+        </button>
       </div>
     </section>
   )
