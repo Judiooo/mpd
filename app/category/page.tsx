@@ -20,16 +20,28 @@ export default function CategoryPageClient() {
   const { data, error, size, setSize, isValidating } = useSWRInfinite<TmdbListResponse>(getKey, tmdbFetcher)
 
   const pages = data ?? []
-  const results = pages.flatMap((p) => p.results).filter((m) => m.poster_path)
+  const totalPages = pages[0]?.total_pages ?? 0
+  const reachedEnd = totalPages > 0 && size >= totalPages
+
+  // flatten and dedupe by id while preserving order
+  const all = pages.flatMap((p) => p.results)
+  const seen = new Set<number>()
+  const results = [] as typeof all
+  for (const m of all) {
+    if (!m.poster_path) continue
+    if (seen.has(m.id)) continue
+    seen.add(m.id)
+    results.push(m)
+  }
 
   const sentinel = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const el = sentinel.current
-    if (!el) return
+    if (!el || reachedEnd) return
     const obs = new IntersectionObserver((entries) => {
       for (const e of entries) {
-        if (e.isIntersecting) {
+        if (!reachedEnd && e.isIntersecting) {
           setSize((s) => s + 1)
         }
       }
@@ -38,7 +50,7 @@ export default function CategoryPageClient() {
     return () => obs.disconnect()
     // only recreate when sentinel element changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sentinel.current, setSize])
+  }, [sentinel.current, setSize, reachedEnd])
 
   return (
     <main className="mx-auto max-w-[1200px] p-6">

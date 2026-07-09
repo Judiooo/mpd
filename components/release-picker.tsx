@@ -239,18 +239,35 @@ export function ReleasePicker({ target, onClose }: { target: PlayTarget; onClose
                     const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9а-яё]+/g, ' ').trim()
                     const targetNorm = norm(target.title + (target.year ? ` ${target.year}` : ''))
                     const tNorm = norm(r.title)
-                    if (!tNorm.includes(targetNorm) && !targetNorm.includes(tNorm)) {
-                      // for TV try season match if applicable
-                      if (target.season != null) {
-                        const seasonStr = `s${String(target.season).padStart(2, '0')}`
-                        const ruSeason = `${target.season} сезон`
-                        if (!tNorm.includes(seasonStr) && !tNorm.includes(String(target.season)) && !tNorm.includes(ruSeason)) {
-                          return false
+                      // try several relaxed matching strategies
+                      const targetWords = target.title.toLowerCase().split(/\s+/).filter((w) => w.length > 2)
+                      const wordMatches = targetWords.filter((w) => tNorm.includes(w)).length
+                      const basicMatch = tNorm.includes(targetNorm) || targetNorm.includes(tNorm)
+                      if (!basicMatch) {
+                        // if many words in title require at least 2 matches, otherwise at least 1
+                        if (targetWords.length >= 3) {
+                          if (wordMatches < 2) {
+                            // allow season match for TV
+                            if (target.season != null) {
+                              const seasonStr = `s${String(target.season).padStart(2, '0')}`
+                              const ruSeason = `${target.season} сезон`
+                              if (!tNorm.includes(seasonStr) && !tNorm.includes(String(target.season)) && !tNorm.includes(ruSeason)) return false
+                            } else {
+                              return false
+                            }
+                          }
+                        } else {
+                          if (wordMatches < 1) {
+                            if (target.season != null) {
+                              const seasonStr = `s${String(target.season).padStart(2, '0')}`
+                              const ruSeason = `${target.season} сезон`
+                              if (!tNorm.includes(seasonStr) && !tNorm.includes(String(target.season)) && !tNorm.includes(ruSeason)) return false
+                            } else {
+                              return false
+                            }
+                          }
                         }
-                      } else {
-                        return false
                       }
-                    }
                     return true
                   })
                   .map((r, i) => {
