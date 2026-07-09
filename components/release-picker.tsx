@@ -112,18 +112,15 @@ export function ReleasePicker({ target, onClose }: { target: PlayTarget; onClose
         return
       }
       try {
-        const queries = [
-          `${target.title} ${target.year}`.trim(),
-          target.originalTitle && target.originalTitle !== target.title
-            ? `${target.originalTitle} ${target.year}`.trim()
-            : null,
-        ].filter(Boolean) as string[]
-
-        let found: JackettRelease[] = []
-        for (const q of queries) {
-          found = await searchReleases(settings.jackettUrl, settings.jackettApiKey, q)
-          if (found.length > 0) break
+        const params = {
+          title: target.title,
+          originalTitle: target.originalTitle,
+          year: target.year,
+          mediaType: target.mediaType,
+          indexers: settings.jackettIndexers,
         }
+
+        const found = await searchReleases(settings.jackettUrl, settings.jackettApiKey, params)
         if (cancelled) return
         if (found.length === 0) {
           setStep({ name: 'error', message: 'Релизы не найдены. Попробуйте другой запрос или проверьте трекеры в Jackett.' })

@@ -45,20 +45,33 @@ export function formatSize(bytes: number): string {
   return `${mb.toFixed(0)} МБ`
 }
 
+export type JackettSearchParams =
+  | string
+  | {
+      title?: string
+      originalTitle?: string
+      year?: string
+      mediaType?: 'movie' | 'tv' | 'anime'
+      query?: string
+      indexers?: Record<string, boolean>
+    }
+
 export async function searchReleases(
   jackettUrl: string,
   apiKey: string,
-  query: string,
-  indexers?: Record<string, boolean>,
+  paramsInput: JackettSearchParams,
 ): Promise<JackettRelease[]> {
-  const params = new URLSearchParams({
-    url: jackettUrl,
-    apikey: apiKey,
-    query,
-  })
+  const params = new URLSearchParams({ url: jackettUrl, apikey: apiKey })
 
-  if (indexers) {
-    params.set('indexers', JSON.stringify(indexers))
+  if (typeof paramsInput === 'string') {
+    params.set('query', paramsInput)
+  } else {
+    if (paramsInput.query) params.set('query', paramsInput.query)
+    if (paramsInput.title) params.set('title', paramsInput.title)
+    if (paramsInput.originalTitle) params.set('originalTitle', paramsInput.originalTitle)
+    if (paramsInput.year) params.set('year', paramsInput.year)
+    if (paramsInput.mediaType) params.set('mediaType', paramsInput.mediaType)
+    if (paramsInput.indexers) params.set('indexers', JSON.stringify(paramsInput.indexers))
   }
 
   const res = await fetch(`/api/jackett/search?${params}`)
