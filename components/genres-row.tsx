@@ -3,16 +3,17 @@
 import Link from 'next/link'
 
 const CURATED_GENRES: { id: number; name: string }[] = [
-  { id: 28, name: 'Боевики' },
-  { id: 35, name: 'Комедии' },
+  { id: 28, name: 'Боевик' },
+  { id: 35, name: 'Комедия' },
+  { id: 18, name: 'Драма' },
+  { id: 53, name: 'Триллер' },
   { id: 27, name: 'Ужасы' },
-  { id: 16, name: 'Мультфильмы' },
-  { id: 18, name: 'Драмы' },
-  { id: 53, name: 'Триллеры' },
-  { id: 10749, name: 'Романтика' },
-  { id: 99, name: 'Документальные' },
-  { id: 10751, name: 'Семейные' },
   { id: 878, name: 'Фантастика' },
+  { id: 14, name: 'Фэнтези' },
+  { id: 16, name: 'Мультфильмы' },
+  { id: 9648, name: 'Детектив' },
+  { id: 36, name: 'Исторические' },
+  { id: 10752, name: 'Военные' },
 ]
 
 export function GenresRow({ media = 'movie' }: { media?: 'movie' | 'tv' }) {
