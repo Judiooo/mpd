@@ -120,7 +120,7 @@ export function ReleasePicker({ target, onClose }: { target: PlayTarget; onClose
           indexers: settings.jackettIndexers,
         }
 
-        const found = await searchReleases(settings.jackettUrl, settings.jackettApiKey, params)
+        let found = await searchReleases(settings.jackettUrl, settings.jackettApiKey, params)
         if (cancelled) return
         if (found.length === 0) {
           setStep({ name: 'error', message: 'Релизы не найдены. Попробуйте другой запрос или проверьте трекеры в Jackett.' })
