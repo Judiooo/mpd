@@ -17,6 +17,7 @@ const pendingRequests = new Map<string, Promise<NextResponse>>()
 const responseCache = new Map<string, { expiresAt: number; status: number; payload: unknown }>()
 const JACKETT_TIMEOUT_MS = 10000
 const CACHE_TTL_MS = 8000
+const FAILED_CACHE_TTL_MS = 4000
 
 function normalizeBase(url: string): string {
   return url.replace(/\/+$/, '')
@@ -63,8 +64,10 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(payload, { status: 401 })
       }
       if (!res.ok) {
-        const payload = { error: `Jackett вернул ошибку ${res.status}` }
-        responseCache.set(cacheKey, { expiresAt: now + CACHE_TTL_MS, status: 502, payload })
+        const text = await res.text().catch(() => '')
+        const detail = text ? `: ${text}` : ''
+        const payload = { error: `Jackett вернул ошибку ${res.status}${detail}` }
+        responseCache.set(cacheKey, { expiresAt: now + FAILED_CACHE_TTL_MS, status: 502, payload })
         return NextResponse.json(payload, { status: 502 })
       }
 
@@ -94,7 +97,7 @@ export async function GET(req: NextRequest) {
       const payload = {
         error: isAbort ? 'Jackett не ответил вовремя (таймаут)' : 'Jackett недоступен: проверьте URL в настройках',
       }
-      responseCache.set(cacheKey, { expiresAt: now + CACHE_TTL_MS, status: 502, payload })
+      responseCache.set(cacheKey, { expiresAt: now + FAILED_CACHE_TTL_MS, status: 502, payload })
       return NextResponse.json(payload, { status: 502 })
     } finally {
       pendingRequests.delete(cacheKey)
