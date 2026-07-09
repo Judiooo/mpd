@@ -1,12 +1,20 @@
 "use client"
 
-import { useEffect, useRef } from 'react'
+import { Suspense, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import useSWRInfinite from 'swr/infinite'
 import { MediaCard } from '@/components/media-card'
-import { tmdbFetcher, type TmdbListResponse } from '@/lib/tmdb'
+import { filterCatalogMedia, tmdbFetcher, type TmdbListResponse } from '@/lib/tmdb'
 
-export default function CategoryPageClient() {
+export default function CategoryPage() {
+  return (
+    <Suspense fallback={<main className="mx-auto max-w-[1200px] p-6"><div className="text-sm text-muted-foreground">Загрузка...</div></main>}>
+      <CategoryPageClient />
+    </Suspense>
+  )
+}
+
+function CategoryPageClient() {
   const params = useSearchParams()
   const path = params.get('path') ?? 'movie/popular'
   const title = params.get('title') ?? ''
@@ -28,8 +36,7 @@ export default function CategoryPageClient() {
   const all = pages.flatMap((p) => p.results)
   const seen = new Set<number>()
   const results = [] as typeof all
-  for (const m of all) {
-    if (!m.poster_path) continue
+  for (const m of filterCatalogMedia(all, media)) {
     if (seen.has(m.id)) continue
     seen.add(m.id)
     results.push(m)

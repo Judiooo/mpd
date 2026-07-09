@@ -18,7 +18,7 @@ export function ContinueWatchingRow() {
     for (const h of getHistory()) {
       const key = progressKey(h.id, h.mediaType, h.season, h.episode)
       const p = getProgress(key)
-      if (p && p.duration > 0 && p.position > 60 && p.position / p.duration < 0.95) {
+      if (p && p.duration > 0 && p.position >= 10 && p.position / p.duration < 0.95) {
         result.push({ ...h, progress: p })
       }
       if (result.length >= 12) break

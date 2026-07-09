@@ -16,7 +16,6 @@ export default function HomePage() {
         <MediaRow title="Популярное" path="movie/popular" mediaType="movie" />
         <MediaRow title="Новинки" path="movie/upcoming" mediaType="movie" />
         <MediaRow title="Сейчас в кино" path="movie/now_playing" mediaType="movie" />
-        <MediaRow title="Сериалы" path="tv/popular" mediaType="tv" />
         <MediaRow title="Фильмы" path="discover/movie?sort_by=popularity.desc" mediaType="movie" />
 
         <GenresRow media="movie" />

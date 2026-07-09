@@ -5,7 +5,7 @@ import useSWR from 'swr'
 import { SearchIcon } from 'lucide-react'
 import { MediaCard } from '@/components/media-card'
 import { useSettings } from '@/lib/settings-context'
-import { mediaTitle, mediaYear, tmdbFetcher, type TmdbListResponse } from '@/lib/tmdb'
+import { filterCatalogMedia, mediaTitle, mediaYear, tmdbFetcher, type TmdbListResponse } from '@/lib/tmdb'
 
 export default function SearchPage() {
   const [input, setInput] = useState('')
@@ -18,7 +18,7 @@ export default function SearchPage() {
   )
 
   const results = useMemo(() => {
-    const list = data?.results.filter((m) => m.media_type !== 'person' && m.poster_path) ?? []
+    const list = filterCatalogMedia(data?.results ?? [], 'movie')
     const sorted = [...list]
     switch (settings.sortOrder) {
       case 'rating':

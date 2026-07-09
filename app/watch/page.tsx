@@ -36,7 +36,7 @@ function WatchContent() {
     if (!id) return
     addToHistory({ id, mediaType, title, posterPath: poster, year, season, episode })
     const saved = getProgress(storageKey)
-    if (saved && saved.position > 60 && saved.duration > 0 && saved.position / saved.duration < 0.95) {
+    if (saved && saved.position >= 10 && saved.duration > 0 && saved.position / saved.duration < 0.95) {
       setResume('ask')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

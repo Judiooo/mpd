@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import useSWR from 'swr'
 import { MediaCard } from '@/components/media-card'
-import { tmdbFetcher, type TmdbListResponse } from '@/lib/tmdb'
+import { filterCatalogMedia, tmdbFetcher, type TmdbListResponse } from '@/lib/tmdb'
 
 export function MediaRow({
   title,
@@ -41,8 +41,7 @@ export function MediaRow({
               <div className="aspect-[2/3] animate-pulse rounded-lg bg-card" />
             </div>
           ))}
-        {data?.results
-          .filter((m) => m.poster_path)
+        {filterCatalogMedia(data?.results ?? [], mediaType)
           .slice(0, 20)
           .map((m) => (
             <MediaCard key={m.id} media={m} mediaType={mediaType} />
