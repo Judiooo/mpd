@@ -52,6 +52,8 @@ export type JackettSearchParams =
       originalTitle?: string
       year?: string
       mediaType?: 'movie' | 'tv' | 'anime'
+      season?: number
+      episode?: number
       query?: string
       indexers?: Record<string, boolean>
     }
@@ -71,6 +73,8 @@ export async function searchReleases(
     if (paramsInput.originalTitle) params.set('originalTitle', paramsInput.originalTitle)
     if (paramsInput.year) params.set('year', paramsInput.year)
     if (paramsInput.mediaType) params.set('mediaType', paramsInput.mediaType)
+    if (paramsInput.season != null) params.set('season', String(paramsInput.season))
+    if (paramsInput.episode != null) params.set('episode', String(paramsInput.episode))
     if (paramsInput.indexers) params.set('indexers', JSON.stringify(paramsInput.indexers))
   }
 

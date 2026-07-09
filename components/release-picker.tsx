@@ -117,6 +117,8 @@ export function ReleasePicker({ target, onClose }: { target: PlayTarget; onClose
           originalTitle: target.originalTitle,
           year: target.year,
           mediaType: target.mediaType,
+          season: target.season,
+          episode: target.episode,
           indexers: settings.jackettIndexers,
         }
 

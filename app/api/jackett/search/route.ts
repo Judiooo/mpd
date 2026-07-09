@@ -105,6 +105,8 @@ export async function GET(req: NextRequest) {
   const rawIndexers = req.nextUrl.searchParams.get('indexers')
   const RESULT_LIMIT = 200
 
+  const targetSeason = seasonParam ? Number(seasonParam) : undefined
+  const targetEpisode = episodeParam ? Number(episodeParam) : undefined
 
     // normalize and filter with preliminary scoring and smarter deduplication
     type Norm = {
@@ -152,8 +154,10 @@ export async function GET(req: NextRequest) {
 
     function extractSeasonEpisode(s: string): { season?: number; episode?: number } {
       const t = s.toLowerCase()
-      const seMatch = t.match(/s(\d{1,2})e(\d{1,2})/)
+      const seMatch = t.match(/s(\d{1,2})e(\d{1,2})/) || t.match(/(\d{1,2})x(\d{1,2})/)
       if (seMatch) return { season: Number(seMatch[1]), episode: Number(seMatch[2]) }
+      const seRuMatch = t.match(/(\d{1,2}) сезон[^\d]*(\d{1,2}) серия/)
+      if (seRuMatch) return { season: Number(seRuMatch[1]), episode: Number(seRuMatch[2]) }
       const seasonMatch = t.match(/season\s*(\d{1,2})/) || t.match(/(\d{1,2}) сезон/)
       if (seasonMatch) return { season: Number(seasonMatch[1]) }
       const simpleS = t.match(/\b(сезон|season)\s*(\d{1,2})\b/)
@@ -185,10 +189,34 @@ export async function GET(req: NextRequest) {
       if (title) {
         if (year) queries.push(`${title} ${year}`)
         queries.push(title)
+        if (mediaType === 'tv' && targetSeason != null) {
+          const seasonTag = `s${String(targetSeason).padStart(2, '0')}`
+          const ruSeason = `${targetSeason} сезон`
+          queries.push(`${title} ${seasonTag}`)
+          queries.push(`${title} ${ruSeason}`)
+          if (targetEpisode != null) {
+            const episodeTag = `e${String(targetEpisode).padStart(2, '0')}`
+            queries.push(`${title} ${seasonTag}${episodeTag}`)
+            queries.push(`${title} ${seasonTag} ${episodeTag}`)
+            queries.push(`${title} ${targetSeason}x${targetEpisode}`)
+          }
+        }
       }
       if (originalTitle && originalTitle !== title) {
         if (year) queries.push(`${originalTitle} ${year}`)
         queries.push(originalTitle)
+        if (mediaType === 'tv' && targetSeason != null) {
+          const seasonTag = `s${String(targetSeason).padStart(2, '0')}`
+          const ruSeason = `${targetSeason} сезон`
+          queries.push(`${originalTitle} ${seasonTag}`)
+          queries.push(`${originalTitle} ${ruSeason}`)
+          if (targetEpisode != null) {
+            const episodeTag = `e${String(targetEpisode).padStart(2, '0')}`
+            queries.push(`${originalTitle} ${seasonTag}${episodeTag}`)
+            queries.push(`${originalTitle} ${seasonTag} ${episodeTag}`)
+            queries.push(`${originalTitle} ${targetSeason}x${targetEpisode}`)
+          }
+        }
       }
       if (queries.length === 0 && query) queries.push(query)
 
