@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  if (!query) {
+  if (!query && !title && !originalTitle) {
     return NextResponse.json(
       {
         error: 'Пустой поисковый запрос',
