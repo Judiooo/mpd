@@ -1,5 +1,4 @@
 'use client'
-'use client'
 
 import Link from 'next/link'
 import useSWR from 'swr'
@@ -35,7 +34,7 @@ export function Hero() {
 
   return (
     <section className="relative mx-4 mt-4 overflow-hidden rounded-xl md:mx-8" aria-label="Рекомендуемое">
-      <div className="relative aspect-[16/9] w-full sm:aspect-[16/7]">
+      <div className="relative w-full h-[28vh] sm:h-[32vh]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={backdropUrl(item.backdrop_path, 'w1280') ?? ''} alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />

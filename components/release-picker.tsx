@@ -41,6 +41,10 @@ export function ReleasePicker({ target, onClose }: { target: PlayTarget; onClose
   const router = useRouter()
   const { settings } = useSettings()
   const [step, setStep] = useState<Step>({ name: 'searching' })
+  const [releases, setReleases] = useState<JackettRelease[] | null>(null)
+  const [qualityFilter, setQualityFilter] = useState<string>('any')
+  const [subsOnly, setSubsOnly] = useState<boolean>(false)
+  const [voiceFilter, setVoiceFilter] = useState<string>('any')
   const dialogRef = useRef<HTMLDivElement>(null)
 
   const goToPlayer = useCallback(
@@ -115,20 +119,22 @@ export function ReleasePicker({ target, onClose }: { target: PlayTarget; onClose
             : null,
         ].filter(Boolean) as string[]
 
-        let releases: JackettRelease[] = []
+        let found: JackettRelease[] = []
         for (const q of queries) {
-          releases = await searchReleases(settings.jackettUrl, settings.jackettApiKey, q)
-          if (releases.length > 0) break
+          found = await searchReleases(settings.jackettUrl, settings.jackettApiKey, q)
+          if (found.length > 0) break
         }
         if (cancelled) return
-        if (settings.preferredQuality !== 'any') {
-          const filtered = releases.filter((r) => detectQuality(r.title) === settings.preferredQuality)
-          if (filtered.length > 0) releases = filtered
-        }
-        if (releases.length === 0) {
+        if (found.length === 0) {
           setStep({ name: 'error', message: 'Релизы не найдены. Попробуйте другой запрос или проверьте трекеры в Jackett.' })
         } else {
-          setStep({ name: 'releases', releases })
+          // apply preferred quality hint but keep full list for filtering
+          if (settings.preferredQuality !== 'any') {
+            const hint = found.filter((r) => detectQuality(r.title) === settings.preferredQuality)
+            if (hint.length > 0) found = hint
+          }
+          setReleases(found)
+          setStep({ name: 'releases', releases: found })
         }
       } catch (err) {
         if (!cancelled) setStep({ name: 'error', message: err instanceof Error ? err.message : 'Ошибка поиска' })
@@ -194,42 +200,94 @@ export function ReleasePicker({ target, onClose }: { target: PlayTarget; onClose
             </div>
           )}
 
-          {step.name === 'releases' && (
-            <ul className="flex flex-col gap-2">
-              {step.releases.map((r, i) => {
-                const quality = detectQuality(r.title)
-                const voice = detectVoice(r.title)
-                return (
-                  <li key={i}>
-                    <button
-                      onClick={() => selectRelease(r)}
-                      className="tv-focus w-full rounded-lg border border-border bg-background p-3 text-left hover:border-primary/50"
-                    >
-                      <p className="mb-2 line-clamp-2 text-sm font-medium leading-snug">{r.title}</p>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                        <span className={cn('rounded px-1.5 py-0.5 font-semibold', QUALITY_COLORS[quality])}>
-                          {quality === 'unknown' ? 'SD?' : quality}
-                        </span>
-                        {voice && <span className="rounded bg-secondary px-1.5 py-0.5 text-secondary-foreground">{voice}</span>}
-                        <span>{formatSize(r.size)}</span>
-                        <span className="flex items-center gap-1 text-green-500">
-                          <ArrowUp className="size-3" aria-hidden="true" />
-                          {r.seeders}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <ArrowDown className="size-3" aria-hidden="true" />
-                          {r.peers}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Users className="size-3" aria-hidden="true" />
-                          {r.tracker}
-                        </span>
-                      </div>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+          {step.name === 'releases' && releases && (
+            <div>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <label className="text-sm text-muted-foreground">Качество:</label>
+                <select value={qualityFilter} onChange={(e) => setQualityFilter(e.target.value)} className="tv-focus rounded border px-2 py-1">
+                  <option value="any">Любое</option>
+                  <option value="2160p">2160p</option>
+                  <option value="1080p">1080p</option>
+                  <option value="720p">720p</option>
+                  <option value="480p">480p</option>
+                </select>
+
+                <label className="ml-4 text-sm text-muted-foreground">Озвучка:</label>
+                <select value={voiceFilter} onChange={(e) => setVoiceFilter(e.target.value)} className="tv-focus rounded border px-2 py-1">
+                  <option value="any">Любая</option>
+                  <option value="Дубляж">Дубляж</option>
+                  <option value="LostFilm">LostFilm</option>
+                  <option value="HDRezka">HDRezka</option>
+                  <option value="Многоголосый">Многоголосый</option>
+                  <option value="Двухголосый">Двухголосый</option>
+                </select>
+
+                <label className="ml-4 flex items-center gap-2 text-sm text-muted-foreground">
+                  <input type="checkbox" checked={subsOnly} onChange={(e) => setSubsOnly(e.target.checked)} />
+                  Только с субтитрами
+                </label>
+              </div>
+
+              <ul className="flex flex-col gap-2">
+                {releases
+                  .filter((r) => {
+                    if (qualityFilter !== 'any' && detectQuality(r.title) !== qualityFilter) return false
+                    const v = detectVoice(r.title)
+                    if (voiceFilter !== 'any' && v !== voiceFilter) return false
+                    if (subsOnly && !/sub|subtitle|субтитр|subtitl/i.test(r.title)) return false
+                    // exact-ish title matching
+                    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9а-яё]+/g, ' ').trim()
+                    const targetNorm = norm(target.title + (target.year ? ` ${target.year}` : ''))
+                    const tNorm = norm(r.title)
+                    if (!tNorm.includes(targetNorm) && !targetNorm.includes(tNorm)) {
+                      // for TV try season match if applicable
+                      if (target.season != null) {
+                        const seasonStr = `s${String(target.season).padStart(2, '0')}`
+                        const ruSeason = `${target.season} сезон`
+                        if (!tNorm.includes(seasonStr) && !tNorm.includes(String(target.season)) && !tNorm.includes(ruSeason)) {
+                          return false
+                        }
+                      } else {
+                        return false
+                      }
+                    }
+                    return true
+                  })
+                  .map((r, i) => {
+                    const quality = detectQuality(r.title)
+                    const voice = detectVoice(r.title)
+                    return (
+                      <li key={i}>
+                        <button
+                          onClick={() => selectRelease(r)}
+                          className="tv-focus w-full rounded-lg border border-border bg-background p-3 text-left hover:border-primary/50"
+                        >
+                          <p className="mb-2 line-clamp-2 text-sm font-medium leading-snug">{r.title}</p>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                            <span className={cn('rounded px-1.5 py-0.5 font-semibold', QUALITY_COLORS[quality])}>
+                              {quality === 'unknown' ? 'SD?' : quality}
+                            </span>
+                            {voice && <span className="rounded bg-secondary px-1.5 py-0.5 text-secondary-foreground">{voice}</span>}
+                            <span>{formatSize(r.size)}</span>
+                            <span className="flex items-center gap-1 text-green-500">
+                              <ArrowUp className="size-3" aria-hidden="true" />
+                              {r.seeders}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <ArrowDown className="size-3" aria-hidden="true" />
+                              {r.peers}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Users className="size-3" aria-hidden="true" />
+                              {r.tracker}
+                            </span>
+                          </div>
+                        </button>
+                      </li>
+                    )
+                  })}
+              </ul>
+            </div>
           )}
 
           {step.name === 'files' && (
